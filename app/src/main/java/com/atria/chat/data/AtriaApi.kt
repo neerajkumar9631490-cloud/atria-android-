@@ -33,7 +33,7 @@ class AtriaApi {
     private var currentCall: okhttp3.Call? = null
 
     fun cancel() {
-        try { currentCall?.cancel() } catch (_: Exception) { }
+        try { currentCall?.cancel() } catch (_e: Exception) { }
     }
 
     /**
@@ -72,7 +72,7 @@ class AtriaApi {
         try {
             call.execute().use { resp ->
                 if (!resp.isSuccessful) {
-                    val raw = try { resp.body?.string().orEmpty() } catch (_: Exception) { "" }
+                    val raw = try { resp.body?.string().orEmpty() } catch (_e: Exception) { "" }
                     throw AtriaException(describeHttpError(resp.code, raw))
                 }
                 val source = resp.body?.source() ?: throw AtriaException("Empty response from the model.")
@@ -81,7 +81,7 @@ class AtriaApi {
                 while (true) {
                     // Cooperative cancellation
                     if (!kotlin.coroutines.coroutineContext.isActive) {
-                        try { call.cancel() } catch (_: Exception) { }
+                        try { call.cancel() } catch (_e: Exception) { }
                         throw kotlinx.coroutines.CancellationException("Stopped")
                     }
                     val line: String? = try {
@@ -99,7 +99,7 @@ class AtriaApi {
                     if (l == "[DONE]") break
                     val chunk: SseChunk = try {
                         wireJson.decodeFromString(SseChunk.serializer(), l)
-                    } catch (_: Exception) {
+                    } catch (_e: Exception) {
                         continue
                     }
                     if (chunk.error != null) {
@@ -150,7 +150,7 @@ class AtriaApi {
                 } else if (body.length < 500) {
                     return "API error $code: ${body.take(500)}"
                 }
-            } catch (_: Exception) {
+            } catch (_e: Exception) {
                 if (body.length < 500) return "API error $code: ${body.take(500)}"
             }
         }

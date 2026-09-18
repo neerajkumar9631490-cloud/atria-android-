@@ -71,7 +71,7 @@ class AtriaStore(private val appContext: Context) {
             val raw = f.readText()
             if (raw.isBlank()) return@withContext emptyList()
             json.decodeFromString(ListSerializer(Conversation.serializer()), raw)
-        } catch (_: Exception) {
+        } catch (_e: Exception) {
             emptyList()
         }
     }
@@ -79,8 +79,8 @@ class AtriaStore(private val appContext: Context) {
     private suspend fun loadActiveId(): String? = withContext(Dispatchers.IO) {
         try {
             val f = activeFile()
-            if (!f.exists()) null else f.readText().trim().ifEmpty { null }
-        } catch (_: Exception) { null }
+            if (!f.exists()) null else f.readText().trim().takeIf { it.isNotEmpty() }
+        } catch (_e: Exception) { null }
     }
 
     fun persistConvos(list: List<Conversation>, active: String?) {
@@ -91,7 +91,7 @@ class AtriaStore(private val appContext: Context) {
                 try {
                     convosFile().writeText(json.encodeToString(ListSerializer(Conversation.serializer()), list))
                     if (active != null) activeFile().writeText(active) else activeFile().delete()
-                } catch (_: Exception) { }
+                } catch (_e: Exception) { }
             }
         }
     }

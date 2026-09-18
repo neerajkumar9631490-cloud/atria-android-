@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        try { api.cancel() } catch (_: Exception) { }
+        try { api.cancel() } catch (_e: Exception) { }
         super.onStop()
     }
 }
