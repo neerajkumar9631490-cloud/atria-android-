@@ -45,7 +45,15 @@ jobs:
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          set +e
+          gradle assembleDebug --no-daemon --stacktrace --console=plain 2>&1 | tee build.log
+          code=${PIPESTATUS[0]}
+          echo "gradle exit code: $code"
+          # Surface Kotlin errors as annotations (visible via API without sign-in)
+          grep -E "^e: " build.log | head -n 25 | while IFS= read -r line; do echo "::error::$line"; done
+          grep -E "FAILED|What went wrong" build.log | head -n 10 | while IFS= read -r line; do echo "::warning::$line"; done
+          exit $code
 
       - name: Rename APK
         run: |
