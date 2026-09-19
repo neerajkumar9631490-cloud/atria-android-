@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.animateItem
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -254,7 +253,7 @@ fun AtriaHome(vm: ChatViewModel) {
                                     messages,
                                     key = { k, m -> "$k-${m.role}-${m.content.hashCode()}-${m.error}" }
                                 ) { idx, m ->
-                                    Box(Modifier.animateItem()) {
+                                    Box {
                                         if (m.role == "user") {
                                             UserBubble(
                                                 msg = m, p = p,
