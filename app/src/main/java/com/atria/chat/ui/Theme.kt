@@ -12,7 +12,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.googlefonts.Font
+import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
+import com.atria.chat.R
 
 // ---------------------------------------------------------------------------
 // Atria design tokens — ported from server.py web UI (aicss.dev palette)
@@ -126,18 +129,45 @@ private fun AtriaPalette.toColorScheme(dark: Boolean): ColorScheme {
     )
 }
 
-private val AtriaTypography = Typography(
-    displaySmall = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp),
-    titleLarge = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
-    titleMedium = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-    bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 24.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 22.sp),
-    bodySmall = TextStyle(fontSize = 12.5.sp, lineHeight = 18.sp),
-    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
-    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp)
+// ---------------------------------------------------------------------------
+// Premium typography — Space Grotesk (display) + Inter (body) via
+// downloadable Google Fonts. Falls back to system fonts offline /
+// without Play Services. JetBrains Mono for code.
+// ---------------------------------------------------------------------------
+
+private val fontProvider = GoogleFont.Provider(
+    providerAuthority = "com.google.android.gms.fonts",
+    providerPackage = "com.google.android.gms",
+    certificates = R.array.com_google_android_gms_fonts_certs
+)
+
+val DisplayFamily = FontFamily(
+    Font(googleFont = GoogleFont("Space Grotesk"), fontProvider = fontProvider),
+    Font(googleFont = GoogleFont("Space Grotesk"), fontProvider = fontProvider, weight = FontWeight.Medium),
+    Font(googleFont = GoogleFont("Space Grotesk"), fontProvider = fontProvider, weight = FontWeight.SemiBold),
+    Font(googleFont = GoogleFont("Space Grotesk"), fontProvider = fontProvider, weight = FontWeight.Bold)
+)
+
+val BodyFamily = FontFamily(
+    Font(googleFont = GoogleFont("Inter"), fontProvider = fontProvider),
+    Font(googleFont = GoogleFont("Inter"), fontProvider = fontProvider, weight = FontWeight.Medium),
+    Font(googleFont = GoogleFont("Inter"), fontProvider = fontProvider, weight = FontWeight.SemiBold),
+    Font(googleFont = GoogleFont("Inter"), fontProvider = fontProvider, weight = FontWeight.Bold)
 )
 
 val MonoFamily = FontFamily.Monospace
+
+private val AtriaTypography = Typography(
+    displaySmall = TextStyle(fontFamily = DisplayFamily, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp, lineHeight = 36.sp),
+    headlineSmall = TextStyle(fontFamily = DisplayFamily, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
+    titleLarge = TextStyle(fontFamily = DisplayFamily, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.1).sp),
+    titleMedium = TextStyle(fontFamily = BodyFamily, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+    bodyLarge = TextStyle(fontFamily = BodyFamily, fontSize = 15.5.sp, lineHeight = 25.sp),
+    bodyMedium = TextStyle(fontFamily = BodyFamily, fontSize = 14.sp, lineHeight = 22.sp),
+    bodySmall = TextStyle(fontFamily = BodyFamily, fontSize = 12.5.sp, lineHeight = 18.sp),
+    labelLarge = TextStyle(fontFamily = BodyFamily, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+    labelSmall = TextStyle(fontFamily = BodyFamily, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp)
+)
 
 @Composable
 fun AtriaTheme(

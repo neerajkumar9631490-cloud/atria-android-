@@ -47,11 +47,15 @@ private sealed interface Block {
     data class H(val level: Int, val text: String) : Block
     data class Code(val lang: String, val code: String) : Block
     data class Quote(val text: String) : Block
-    data class Ul(val items: List<String>) : Block
-    data class Ol(val items: List<String>) : Block
+    data class Ul(val items: List<Item>) : Block
+    data class Ol(val items: List<Item>) : Block
+    data class Task(val items: List<TaskItem>) : Block
     data class Table(val header: List<String>, val rows: List<List<String>>) : Block
     data object Hr : Block
 }
+
+data class Item(val depth: Int, val text: String)
+data class TaskItem(val done: Boolean, val text: String)
 
 private fun parseBlocks(src: String): List<Block> {
     val out = mutableListOf<Block>()
@@ -110,18 +114,38 @@ private fun parseBlocks(src: String): List<Block> {
         }
         if (t.matches(Regex("^([-*•]\\s+).*"))) {
             flush()
-            val items = mutableListOf<String>()
-            while (i < lines.size && lines[i].trim().matches(Regex("^([-*•]\\s+).*"))) {
-                items.add(lines[i].trim().drop(2).trim()); i++
+            val items = mutableListOf<Item>()
+            while (i < lines.size) {
+                val lt = lines[i]
+                val ltt = lt.trim()
+                // task list?
+                val task = Regex("^[-*•]\\s+\\[([ xX])\\]\\s+(.*)").find(ltt)
+                if (task != null) break // handled by task branch below on next loop
+                if (!ltt.matches(Regex("^([-*•]\\s+).*"))) break
+                val depth = (lt.length - lt.trimStart().length) / 2
+                items.add(Item(depth.coerceIn(0, 4), ltt.drop(2).trim())); i++
             }
-            out.add(Block.Ul(items))
+            if (items.isNotEmpty()) out.add(Block.Ul(items))
+            continue
+        }
+        val taskM = Regex("^[-*•]\\s+\\[([ xX])\\]\\s+(.*)").find(t)
+        if (taskM != null) {
+            flush()
+            val items = mutableListOf<TaskItem>()
+            while (i < lines.size) {
+                val m = Regex("^[-*•]\\s+\\[([ xX])\\]\\s+(.*)").find(lines[i].trim()) ?: break
+                items.add(TaskItem(m.groupValues[1].lowercase() == "x", m.groupValues[2].trim())); i++
+            }
+            out.add(Block.Task(items))
             continue
         }
         if (t.matches(Regex("^(\\d+[.)]\\s+).*"))) {
             flush()
-            val items = mutableListOf<String>()
+            val items = mutableListOf<Item>()
             while (i < lines.size && lines[i].trim().matches(Regex("^(\\d+[.)]\\s+).*"))) {
-                items.add(lines[i].trim().replaceFirst(Regex("^\\d+[.)]\\s+"), "")); i++
+                val lt = lines[i]
+                val depth = (lt.length - lt.trimStart().length) / 2
+                items.add(Item(depth.coerceIn(0, 4), lt.trim().replaceFirst(Regex("^\\d+[.)]\\s+"), ""))); i++
             }
             out.add(Block.Ol(items))
             continue
@@ -133,14 +157,14 @@ private fun parseBlocks(src: String): List<Block> {
     return out
 }
 
-/** Inline: `code`, **bold**, *italic*, [text](url) stripped to text + style. */
+/** Inline: `code`, **bold**, ~~strike~~, *italic*, [text](url), bare URLs. */
 @Composable
 fun inline(text: String, base: Color, accent: Color, monoBg: Color, fontSize: Int = 15): AnnotatedString {
     return remember(text, base, accent) {
         buildAnnotatedString {
             var idx = 0
-            // token regex: code | bold | italic | link
-            val re = Regex("(`[^`]+`)|(\\*\\*[^*]+\\*\\*)|(\\*[^*\\n]+\\*)|(\\[[^\\]]+\\]\\([^)]+\\))")
+            // token regex: code | bold | strike | italic | mdlink | url
+            val re = Regex("(`[^`\\n]+`)|(\\*\\*[^*\\n]+\\*\\*)|(~~[^~\\n]+~~)|(\\*[^*\\n]+\\*)|(\\[[^\\]]+\\]\\([^)]+\\))|(https?://[^\\s<\"]+)")
             for (m in re.findAll(text)) {
                 if (m.range.first > idx) append(text.substring(idx, m.range.first))
                 val tok = m.value
@@ -151,12 +175,26 @@ fun inline(text: String, base: Color, accent: Color, monoBg: Color, fontSize: In
                     tok.startsWith("**") -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
                         append(tok.removePrefix("**").removeSuffix("**"))
                     }
+                    tok.startsWith("~~") -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
+                        append(tok.removePrefix("~~").removeSuffix("~~"))
+                    }
                     tok.startsWith("*") -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
                         append(tok.trim('*'))
                     }
                     tok.startsWith("[") -> {
                         val label = tok.substringAfter("[").substringBefore("]")
                         withStyle(SpanStyle(color = accent, textDecoration = TextDecoration.Underline)) { append(label) }
+                    }
+                    else -> {
+                        // bare URL — strip trailing punctuation
+                        var url = tok
+                        var tail = ""
+                        while (url.isNotEmpty() && url.last() in ".,;:!?") {
+                            tail = url.last() + tail
+                            url = url.dropLast(1)
+                        }
+                        withStyle(SpanStyle(color = accent, textDecoration = TextDecoration.Underline)) { append(url) }
+                        if (tail.isNotEmpty()) append(tail)
                     }
                 }
                 idx = m.range.last + 1
@@ -188,6 +226,7 @@ fun ProMarkdown(text: String, p: AtriaPalette) {
                             text = inline(b.text, p.text, p.accentStrong, p.surface3, size),
                             color = p.text,
                             fontSize = size.sp,
+                            fontFamily = DisplayFamily,
                             fontWeight = FontWeight.SemiBold,
                             lineHeight = (size + 6).sp
                         )
@@ -197,6 +236,7 @@ fun ProMarkdown(text: String, p: AtriaPalette) {
                             text = inline(b.text, p.text, p.accentStrong, p.surface3),
                             color = p.text,
                             fontSize = 15.sp,
+                            fontFamily = BodyFamily,
                             lineHeight = 24.sp
                         )
                     }
@@ -225,12 +265,13 @@ fun ProMarkdown(text: String, p: AtriaPalette) {
                     is Block.Ul -> {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             b.items.forEach { item ->
-                                Row {
-                                    Text("•  ", color = p.faint, fontSize = 15.sp)
+                                Row(modifier = Modifier.padding(start = (item.depth * 18).dp)) {
+                                    Text("•  ", color = p.faint, fontSize = 15.sp, fontFamily = BodyFamily)
                                     Text(
-                                        text = inline(item, p.text, p.accentStrong, p.surface3),
+                                        text = inline(item.text, p.text, p.accentStrong, p.surface3),
                                         color = p.text,
                                         fontSize = 15.sp,
+                                        fontFamily = BodyFamily,
                                         lineHeight = 23.sp,
                                         modifier = Modifier.weight(1f)
                                     )
@@ -240,14 +281,50 @@ fun ProMarkdown(text: String, p: AtriaPalette) {
                     }
                     is Block.Ol -> {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            b.items.forEachIndexed { k, item ->
-                                Row {
-                                    Text("${k + 1}.  ", color = p.faint, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            var n = 0
+                            b.items.forEach { item ->
+                                if (item.depth == 0) n++
+                                Row(modifier = Modifier.padding(start = (item.depth * 18).dp)) {
                                     Text(
-                                        text = inline(item, p.text, p.accentStrong, p.surface3),
+                                        if (item.depth == 0) "$n.  " else "–  ",
+                                        color = p.faint, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                                        fontFamily = BodyFamily
+                                    )
+                                    Text(
+                                        text = inline(item.text, p.text, p.accentStrong, p.surface3),
                                         color = p.text,
                                         fontSize = 15.sp,
+                                        fontFamily = BodyFamily,
                                         lineHeight = 23.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    is Block.Task -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            b.items.forEach { item ->
+                                Row(verticalAlignment = Alignment.Top) {
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(top = 3.dp)
+                                            .size(17.dp)
+                                            .clip(RoundedCornerShape(5.dp))
+                                            .border(1.5.dp, if (item.done) p.accent else p.borderStrong, RoundedCornerShape(5.dp))
+                                            .background(if (item.done) p.accent else Color.Transparent),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (item.done) Text("✓", color = p.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        text = inline(item.text, p.text, p.accentStrong, p.surface3),
+                                        color = if (item.done) p.faint else p.text,
+                                        fontSize = 15.sp,
+                                        fontFamily = BodyFamily,
+                                        lineHeight = 23.sp,
+                                        style = if (item.done) androidx.compose.ui.text.TextStyle(textDecoration = TextDecoration.LineThrough) else androidx.compose.ui.text.TextStyle(),
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
@@ -290,6 +367,7 @@ private fun ProTable(b: Block.Table, p: AtriaPalette) {
                         text = h,
                         color = p.text,
                         fontWeight = FontWeight.SemiBold,
+                        fontFamily = BodyFamily,
                         fontSize = 13.5.sp,
                         modifier = Modifier
                             .width(150.dp)
@@ -297,12 +375,14 @@ private fun ProTable(b: Block.Table, p: AtriaPalette) {
                     )
                 }
             }
-            b.rows.forEach { row ->
-                Row {
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(p.borderStrong))
+            b.rows.forEachIndexed { ri, row ->
+                Row(modifier = Modifier.background(if (ri % 2 == 1) p.surface2.copy(alpha = 0.45f) else Color.Transparent)) {
                     row.forEach { cell ->
                         Text(
                             text = cell,
                             color = p.dim,
+                            fontFamily = BodyFamily,
                             fontSize = 13.5.sp,
                             modifier = Modifier
                                 .width(150.dp)

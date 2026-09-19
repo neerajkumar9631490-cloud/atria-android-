@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -33,8 +34,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -139,6 +144,7 @@ fun UserBubble(msg: ChatMessage, p: AtriaPalette, onCopy: () -> Unit, onEditSave
                     text = msg.content,
                     color = p.text,
                     fontSize = 15.sp,
+                    fontFamily = BodyFamily,
                     lineHeight = 23.sp,
                     modifier = Modifier
                         .clip(RoundedCornerShape(18.dp, 18.dp, 6.dp, 18.dp))
@@ -190,20 +196,22 @@ fun AiMessage(
     onCopy: () -> Unit,
     onRegen: () -> Unit,
     onRetry: () -> Unit,
+    onShare: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    var vote by remember(msg.content, msg.error) { mutableStateOf(0) } // 0 none · 1 up · -1 down
     Row(modifier = Modifier.fillMaxWidth()) {
         AtriaMark(p)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Atria", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text("Atria", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, fontFamily = BodyFamily)
                 val meta = buildList {
                     msg.metaModel?.takeIf { it.isNotBlank() }?.let { add(it) }
                     msg.metaMs?.let { add("%.1fs".format(it / 1000.0)) }
                     if (msg.stopped) add("stopped")
                 }.joinToString(" · ")
-                if (meta.isNotBlank()) Text(meta, color = p.faint, fontSize = 12.sp)
+                if (meta.isNotBlank()) Text(meta, color = p.faint, fontSize = 12.sp, fontFamily = BodyFamily)
             }
             Spacer(Modifier.height(6.dp))
             when {
@@ -222,12 +230,38 @@ fun AiMessage(
                         ErrorCard(msg.error, p, onRetry, onOpenSettings)
                     }
                     if (!generating) {
-                        Row {
-                            IconButton(onClick = onCopy) {
+                        // ChatGPT-style ghost action row
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onCopy, modifier = Modifier.size(34.dp)) {
                                 Icon(Icons.Filled.ContentCopy, "Copy", tint = p.faint, modifier = Modifier.size(16.dp))
                             }
+                            if (!msg.local) {
+                                IconButton(
+                                    onClick = { vote = if (vote == 1) 0 else 1 },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.ThumbUp, "Good response",
+                                        tint = if (vote == 1) p.accentStrong else p.faint,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { vote = if (vote == -1) 0 else -1 },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.ThumbDown, "Bad response",
+                                        tint = if (vote == -1) p.accentStrong else p.faint,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                IconButton(onClick = onShare, modifier = Modifier.size(34.dp)) {
+                                    Icon(Icons.Filled.Share, "Share", tint = p.faint, modifier = Modifier.size(16.dp))
+                                }
+                            }
                             if (isLast && !msg.local) {
-                                IconButton(onClick = onRegen) {
+                                IconButton(onClick = onRegen, modifier = Modifier.size(34.dp)) {
                                     Icon(Icons.Filled.Refresh, "Regenerate", tint = p.faint, modifier = Modifier.size(17.dp))
                                 }
                             }
@@ -274,9 +308,9 @@ fun Welcome(greeting: String, p: AtriaPalette, onSuggest: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 26.dp)) {
         AtriaMark(p, size = 52, iconSize = 26)
         Spacer(Modifier.height(18.dp))
-        Text(greeting, color = p.text, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
+        Text(greeting, color = p.text, fontSize = 31.sp, fontWeight = FontWeight.SemiBold, fontFamily = DisplayFamily, letterSpacing = (-0.5).sp, lineHeight = 37.sp)
         Spacer(Modifier.height(6.dp))
-        Text("What should we work on today?", color = p.dim, fontSize = 16.sp)
+        Text("What should we work on today?", color = p.dim, fontSize = 16.sp, fontFamily = BodyFamily)
         Spacer(Modifier.height(22.dp))
         val cards = listOf(
             Triple(Icons.Filled.Lightbulb, "Explain simply", "How HTTPS keeps your data safe") to
@@ -303,11 +337,20 @@ fun Welcome(greeting: String, p: AtriaPalette, onSuggest: (String) -> Unit) {
                                 .padding(15.dp)
                         ) {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Icon(icon, null, tint = p.accentStrong, modifier = Modifier.size(19.dp))
-                                Column {
-                                    Text(title, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(p.accentSoft)
+                                        .border(1.dp, p.accent.copy(alpha = 0.30f), RoundedCornerShape(10.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(icon, null, tint = p.accentStrong, modifier = Modifier.size(17.dp))
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(title, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, fontFamily = BodyFamily)
                                     Spacer(Modifier.height(3.dp))
-                                    Text(sub, color = p.dim, fontSize = 12.5.sp, lineHeight = 18.sp)
+                                    Text(sub, color = p.dim, fontSize = 12.5.sp, fontFamily = BodyFamily, lineHeight = 18.sp)
                                 }
                             }
                         }
@@ -329,11 +372,13 @@ fun HistoryDrawer(
     activeId: String?,
     query: String,
     p: AtriaPalette,
+    hasKey: Boolean,
     onQuery: (String) -> Unit,
     onNew: () -> Unit,
     onOpen: (String) -> Unit,
     onRename: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onShare: (String) -> Unit,
     onSettings: () -> Unit,
     onToggleTheme: () -> Unit,
     dark: Boolean
@@ -348,15 +393,33 @@ fun HistoryDrawer(
     Column(modifier = Modifier.background(p.surface1)) {
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 16.dp)) {
-            AtriaMark(p, 32, 16)
+            AtriaMark(p, 34, 17)
             Spacer(Modifier.width(10.dp))
-            Text("Atria", color = p.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Spacer(Modifier.width(6.dp))
-            Box(
-                modifier = Modifier
-                    .border(1.dp, p.border, RoundedCornerShape(99.dp))
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) { Text("PRO", color = p.faint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp) }
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Atria", color = p.text, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = DisplayFamily)
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .border(1.dp, p.border, RoundedCornerShape(99.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) { Text("PRO", color = p.faint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontFamily = BodyFamily) }
+                }
+                Spacer(Modifier.height(3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(RoundedCornerShape(99.dp))
+                            .background(if (hasKey) AtriaSuccess else p.faint)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (hasKey) "API key ready" else "No API key — open Settings",
+                        color = p.faint, fontSize = 11.5.sp, fontFamily = BodyFamily
+                    )
+                }
+            }
         }
         Spacer(Modifier.height(14.dp))
         Button(
@@ -423,6 +486,7 @@ fun HistoryDrawer(
                     }
                     item(key = c.id) {
                         val sel = c.id == activeId
+                        var menu by remember(c.id) { mutableStateOf(false) }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -442,14 +506,33 @@ fun HistoryDrawer(
                             if (sel) Spacer(Modifier.width(8.dp))
                             Text(
                                 c.title, color = if (sel) p.text else p.dim, fontSize = 13.5.sp,
+                                fontFamily = BodyFamily,
                                 maxLines = 1, modifier = Modifier.weight(1f)
                             )
-                            if (sel) {
-                                IconButton(onClick = { onRename(c.id) }, modifier = Modifier.size(30.dp)) {
-                                    Icon(Icons.Filled.Edit, "Rename", tint = p.faint, modifier = Modifier.size(15.dp))
+                            Box {
+                                IconButton(onClick = { menu = true }, modifier = Modifier.size(30.dp)) {
+                                    Icon(Icons.Filled.MoreVert, "Chat options", tint = p.faint, modifier = Modifier.size(16.dp))
                                 }
-                                IconButton(onClick = { onDelete(c.id) }, modifier = Modifier.size(30.dp)) {
-                                    Icon(Icons.Filled.Delete, "Delete", tint = p.faint, modifier = Modifier.size(15.dp))
+                                androidx.compose.material3.DropdownMenu(
+                                    expanded = menu,
+                                    onDismissRequest = { menu = false },
+                                    modifier = Modifier.background(p.surface2)
+                                ) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Rename", color = p.text, fontSize = 13.5.sp, fontFamily = BodyFamily) },
+                                        leadingIcon = { Icon(Icons.Filled.Edit, null, tint = p.dim, modifier = Modifier.size(16.dp)) },
+                                        onClick = { menu = false; onRename(c.id) }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Share", color = p.text, fontSize = 13.5.sp, fontFamily = BodyFamily) },
+                                        leadingIcon = { Icon(Icons.Filled.Share, null, tint = p.dim, modifier = Modifier.size(16.dp)) },
+                                        onClick = { menu = false; onShare(c.id) }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Delete", color = AtriaDanger, fontSize = 13.5.sp, fontFamily = BodyFamily) },
+                                        leadingIcon = { Icon(Icons.Filled.Delete, null, tint = AtriaDanger, modifier = Modifier.size(16.dp)) },
+                                        onClick = { menu = false; onDelete(c.id) }
+                                    )
                                 }
                             }
                         }
@@ -598,4 +681,246 @@ fun RenameDialog(initial: String, p: AtriaPalette, onNo: () -> Unit, onYes: (Str
         },
         containerColor = p.surface1
     )
+}
+
+// ---------------------------------------------------------------------------
+// Model picker bottom sheet — ChatGPT-style
+// ---------------------------------------------------------------------------
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun ModelSheet(
+    current: String,
+    p: AtriaPalette,
+    onDismiss: () -> Unit,
+    onPick: (String) -> Unit
+) {
+    var custom by remember(current) { mutableStateOf(current) }
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = p.surface1,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 10.dp)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(p.borderStrong)
+            )
+        }
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+            Text("Choose a model", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, fontFamily = DisplayFamily)
+            Spacer(Modifier.height(4.dp))
+            Text("Trade off speed vs quality per conversation.", color = p.dim, fontSize = 13.sp, fontFamily = BodyFamily)
+            Spacer(Modifier.height(16.dp))
+            ModelRow(
+                name = "Atria Dawn", desc = "Smartest · default reasoning", id = "Atria-Dawn-Preview",
+                selected = current == "Atria-Dawn-Preview", p = p,
+                onClick = { onPick("Atria-Dawn-Preview") }
+            )
+            Spacer(Modifier.height(8.dp))
+            Text("CUSTOM MODEL ID", color = p.faint, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = BodyFamily)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = custom, onValueChange = { custom = it }, singleLine = true,
+                placeholder = { Text("e.g. Atria-Flash", color = p.faint, fontSize = 13.5.sp, fontFamily = BodyFamily) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
+                    focusedTextColor = p.text, unfocusedTextColor = p.text, cursorColor = p.accent
+                ),
+                shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    val v = custom.trim()
+                    if (v.isNotEmpty()) onPick(v)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.onAccent)
+            ) { Text("Use this model", fontWeight = FontWeight.SemiBold, fontFamily = BodyFamily) }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun ModelRow(name: String, desc: String, id: String, selected: Boolean, p: AtriaPalette, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) p.accentSoft else p.surface2)
+            .border(1.dp, if (selected) p.accent.copy(alpha = 0.45f) else p.border, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(p.accentSoft)
+                .border(1.dp, p.accent.copy(alpha = 0.30f), RoundedCornerShape(11.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Filled.AutoAwesome, null, tint = p.accentStrong, modifier = Modifier.size(19.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(name, color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, fontFamily = BodyFamily)
+            Text("$desc · $id", color = p.dim, fontSize = 12.sp, fontFamily = BodyFamily)
+        }
+        if (selected) Icon(Icons.Filled.Check, null, tint = p.accentStrong, modifier = Modifier.size(19.dp))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Settings full screen — sectioned, premium
+// ---------------------------------------------------------------------------
+
+@Composable
+fun SettingsScreen(
+    apiKey: String,
+    model: String,
+    system: String,
+    dark: Boolean,
+    p: AtriaPalette,
+    onBack: () -> Unit,
+    onSave: (String, String, String, Boolean) -> Unit
+) {
+    var k by remember(apiKey) { mutableStateOf(apiKey) }
+    var m by remember(model) { mutableStateOf(model) }
+    var s by remember(system) { mutableStateOf(system) }
+    var d by remember(dark) { mutableStateOf(dark) }
+    var show by remember { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth().background(p.bg)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.ArrowBack, "Back", tint = p.text)
+            }
+            Text("Settings", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, fontFamily = DisplayFamily)
+            Spacer(Modifier.weight(1f))
+            Button(
+                onClick = { onSave(k, m, s, d) },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.onAccent)
+            ) { Text("Save", fontFamily = BodyFamily) }
+        }
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp)
+        ) {
+            item {
+                SettingSection("ACCOUNT", p) {
+                    Text("API KEY", color = p.faint, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = BodyFamily)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = k, onValueChange = { k = it },
+                        placeholder = { Text("Paste your Atria API key", color = p.faint, fontSize = 13.5.sp, fontFamily = BodyFamily) },
+                        singleLine = true,
+                        visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            TextButton(onClick = { show = !show }) {
+                                Text(if (show) "Hide" else "Show", color = p.accentStrong, fontSize = 12.sp, fontFamily = BodyFamily)
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
+                            focusedTextColor = p.text, unfocusedTextColor = p.text, cursorColor = p.accent
+                        ),
+                        shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    SettingHint(
+                        if (k.isBlank()) "No key yet — the API will reject requests until you add one."
+                        else "Stored only on this device, sent only to api.atria-asi.ai.",
+                        p
+                    )
+                }
+            }
+            item {
+                SettingSection("MODEL", p) {
+                    OutlinedTextField(
+                        value = m, onValueChange = { m = it }, singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
+                            focusedTextColor = p.text, unfocusedTextColor = p.text, cursorColor = p.accent
+                        ),
+                        shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    SettingHint("Default: Atria-Dawn-Preview. Tip: type /model <id> in chat to switch fast.", p)
+                }
+            }
+            item {
+                SettingSection("ASSISTANT", p) {
+                    Text("SYSTEM PROMPT", color = p.faint, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = BodyFamily)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = s, onValueChange = { s = it }, minLines = 2, maxLines = 4,
+                        placeholder = { Text("e.g. You are a concise, senior engineering assistant.", color = p.faint, fontSize = 13.5.sp, fontFamily = BodyFamily) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
+                            focusedTextColor = p.text, unfocusedTextColor = p.text, cursorColor = p.accent
+                        ),
+                        shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    SettingHint("Quietly prepended to every conversation. Optional.", p)
+                }
+            }
+            item {
+                SettingSection("APPEARANCE", p) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ThemeChoice("Dark", selected = d, p = p, modifier = Modifier.weight(1f)) { d = true }
+                        ThemeChoice("Light", selected = !d, p = p, modifier = Modifier.weight(1f)) { d = false }
+                    }
+                }
+            }
+            item {
+                SettingSection("ABOUT", p) {
+                    SettingHint("Atria for Android · v1.0.0 · api.atria-asi.ai", p)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingSection(title: String, p: AtriaPalette, content: @Composable () -> Unit) {
+    Column {
+        Text(title, color = p.faint, fontSize = 11.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontFamily = BodyFamily)
+        Spacer(Modifier.height(10.dp))
+        content()
+    }
+}
+
+@Composable
+private fun SettingHint(text: String, p: AtriaPalette) {
+    Text(text, color = p.faint, fontSize = 12.5.sp, fontFamily = BodyFamily, lineHeight = 18.sp)
+}
+
+@Composable
+private fun ThemeChoice(label: String, selected: Boolean, p: AtriaPalette, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) p.accentSoft else p.surface2)
+            .border(1.dp, if (selected) p.accent.copy(alpha = 0.5f) else p.border, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 13.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label, color = if (selected) p.accentStrong else p.dim,
+            fontWeight = FontWeight.SemiBold, fontSize = 14.sp, fontFamily = BodyFamily
+        )
+    }
 }

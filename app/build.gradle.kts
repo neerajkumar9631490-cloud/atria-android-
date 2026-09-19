@@ -66,4 +66,5 @@ dependencies {
     implementation(libs.compose.material.icons.core)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.compose.foundation)
+    implementation(libs.compose.ui.text.google.fonts)
 }

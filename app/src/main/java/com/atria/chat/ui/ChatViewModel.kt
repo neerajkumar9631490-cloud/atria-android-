@@ -125,14 +125,15 @@ class ChatViewModel(
     fun openSettings() { _showSettings.value = true }
     fun closeSettings() { _showSettings.value = false }
 
-    fun saveSettings(apiKey: String, model: String, system: String) {
+    fun saveSettings(apiKey: String, model: String, system: String, darkTheme: Boolean? = null) {
         viewModelScope.launch {
             val cur = settings.value
             store.saveSettings(
                 cur.copy(
                     apiKey = apiKey.trim(),
                     model = model.trim().ifEmpty { DEFAULT_MODEL },
-                    system = system
+                    system = system,
+                    darkTheme = darkTheme ?: cur.darkTheme
                 )
             )
             _showSettings.value = false
@@ -145,6 +146,35 @@ class ChatViewModel(
             val cur = settings.value
             store.saveSettings(cur.copy(darkTheme = !cur.darkTheme))
         }
+    }
+
+    fun setModel(id: String) {
+        val v = id.trim()
+        if (v.isEmpty()) return
+        viewModelScope.launch {
+            store.saveSettings(settings.value.copy(model = v))
+            emit(UiEvent.Toast("Model set to $v"))
+        }
+    }
+
+    fun toast(msg: String) = emit(UiEvent.Toast(msg))
+
+    fun shareMessage(content: String) {
+        if (content.isBlank()) {
+            emit(UiEvent.Toast("Nothing to share"))
+            return
+        }
+        emit(UiEvent.Share("atria-message.md", content))
+    }
+
+    fun shareConvo(id: String) {
+        val c = convos.value.firstOrNull { it.id == id } ?: return
+        if (c.messages.isEmpty()) {
+            emit(UiEvent.Toast("Nothing to share yet"))
+            return
+        }
+        val md = exportMarkdown(c.title, settings.value.model, c.messages)
+        emit(UiEvent.Share("atria-${c.title.lowercase().replace(Regex("[^a-z0-9]+"), "-").take(40)}.md", md))
     }
 
     // -- composer ------------------------------------------------------------
