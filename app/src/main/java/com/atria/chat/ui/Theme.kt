@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.atria.chat.R
 
@@ -183,3 +184,6 @@ fun AtriaTheme(
 
 @Composable
 fun atriaPalette(darkTheme: Boolean): AtriaPalette = if (darkTheme) DarkPalette else LightPalette
+
+/** Production readability cap — thread + composer center within this width on wide screens. */
+val ThreadMaxWidth = 760.dp

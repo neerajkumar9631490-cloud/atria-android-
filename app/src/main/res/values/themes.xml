@@ -6,4 +6,12 @@
         <item name="android:navigationBarColor">@color/atria_bg</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+
+    <!-- Production launch splash: brand background + accent mark, then Theme.Atria -->
+    <style name="Theme.Atria.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/atria_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimationDuration">600</item>
+        <item name="postSplashScreenTheme">@style/Theme.Atria</item>
+    </style>
 </resources>

@@ -12,6 +12,7 @@ data class ChatMessage(
     val local: Boolean = false,
     val error: String? = null,
     val stopped: Boolean = false,
+    val edited: Boolean = false,
     val metaModel: String? = null,
     val metaMs: Long? = null
 )
@@ -55,6 +56,21 @@ fun bucketOf(ts: Long, now: Long = System.currentTimeMillis()): String {
         diffDays < 30 -> "Previous 30 days"
         else -> "Older"
     }
+}
+
+/** Compact relative time for history rows: "now", "5m", "2h", "Yesterday", "Mon", "12 Jan". */
+fun timeAgo(ts: Long, now: Long = System.currentTimeMillis()): String {
+    val diff = (now - ts).coerceAtLeast(0)
+    val min = diff / 60_000
+    if (min < 1) return "now"
+    if (min < 60) return "${min}m"
+    val hrs = min / 60
+    if (hrs < 24) return "${hrs}h"
+    if (hrs < 48) return "Yesterday"
+    if (hrs < 24 * 7) {
+        return java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault()).format(java.util.Date(ts))
+    }
+    return java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault()).format(java.util.Date(ts))
 }
 
 fun buildHelpMarkdown(currentModel: String): String = listOf(

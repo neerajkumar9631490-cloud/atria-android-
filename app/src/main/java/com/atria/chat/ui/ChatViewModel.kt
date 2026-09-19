@@ -242,7 +242,7 @@ class ChatViewModel(
         }
         if (index < 0 || index >= c.messages.size) return
         val base = c.messages.take(index).toMutableList()
-        base.add(ChatMessage(role = "user", content = v))
+        base.add(ChatMessage(role = "user", content = v, edited = true))
         updateConvo(c.id) { it.copy(messages = base, updated = System.currentTimeMillis()) }
         runCompletion(c.id)
     }

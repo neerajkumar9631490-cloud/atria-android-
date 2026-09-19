@@ -68,9 +68,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import com.atria.chat.data.ChatMessage
 import com.atria.chat.data.Conversation
 import com.atria.chat.data.bucketOf
+import com.atria.chat.data.timeAgo
 
 // ---------------------------------------------------------------------------
 // Small atoms
@@ -153,11 +156,17 @@ fun UserBubble(msg: ChatMessage, p: AtriaPalette, onCopy: () -> Unit, onEditSave
                         .padding(horizontal = 16.dp, vertical = 13.dp)
                 )
             }
-            Row {
-                IconButton(onClick = onCopy) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (msg.edited) {
+                    Text(
+                        "edited", color = p.faint, fontSize = 11.5.sp, fontFamily = BodyFamily,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                }
+                IconButton(onClick = onCopy, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Filled.ContentCopy, "Copy", tint = p.faint, modifier = Modifier.size(17.dp))
                 }
-                IconButton(onClick = { editing = true; draft = msg.content }) {
+                IconButton(onClick = { editing = true; draft = msg.content }, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Filled.Edit, "Edit", tint = p.faint, modifier = Modifier.size(17.dp))
                 }
             }
@@ -232,13 +241,13 @@ fun AiMessage(
                     if (!generating) {
                         // ChatGPT-style ghost action row
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = onCopy, modifier = Modifier.size(34.dp)) {
-                                Icon(Icons.Filled.ContentCopy, "Copy", tint = p.faint, modifier = Modifier.size(16.dp))
+                            IconButton(onClick = onCopy, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Filled.ContentCopy, "Copy response", tint = p.faint, modifier = Modifier.size(16.dp))
                             }
                             if (!msg.local) {
                                 IconButton(
                                     onClick = { vote = if (vote == 1) 0 else 1 },
-                                    modifier = Modifier.size(34.dp)
+                                    modifier = Modifier.size(40.dp)
                                 ) {
                                     Icon(
                                         Icons.Filled.ThumbUp, "Good response",
@@ -248,7 +257,7 @@ fun AiMessage(
                                 }
                                 IconButton(
                                     onClick = { vote = if (vote == -1) 0 else -1 },
-                                    modifier = Modifier.size(34.dp)
+                                    modifier = Modifier.size(40.dp)
                                 ) {
                                     Icon(
                                         Icons.Filled.ThumbDown, "Bad response",
@@ -256,13 +265,13 @@ fun AiMessage(
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
-                                IconButton(onClick = onShare, modifier = Modifier.size(34.dp)) {
-                                    Icon(Icons.Filled.Share, "Share", tint = p.faint, modifier = Modifier.size(16.dp))
+                                IconButton(onClick = onShare, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Filled.Share, "Share response", tint = p.faint, modifier = Modifier.size(16.dp))
                                 }
                             }
                             if (isLast && !msg.local) {
-                                IconButton(onClick = onRegen, modifier = Modifier.size(34.dp)) {
-                                    Icon(Icons.Filled.Refresh, "Regenerate", tint = p.faint, modifier = Modifier.size(17.dp))
+                                IconButton(onClick = onRegen, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Filled.Refresh, "Regenerate response", tint = p.faint, modifier = Modifier.size(17.dp))
                                 }
                             }
                         }
@@ -308,7 +317,11 @@ fun Welcome(greeting: String, p: AtriaPalette, onSuggest: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 26.dp)) {
         AtriaMark(p, size = 52, iconSize = 26)
         Spacer(Modifier.height(18.dp))
-        Text(greeting, color = p.text, fontSize = 31.sp, fontWeight = FontWeight.SemiBold, fontFamily = DisplayFamily, letterSpacing = (-0.5).sp, lineHeight = 37.sp)
+        Text(
+            greeting, color = p.text, fontSize = 31.sp, fontWeight = FontWeight.SemiBold,
+            fontFamily = DisplayFamily, letterSpacing = (-0.5).sp, lineHeight = 37.sp,
+            modifier = Modifier.semantics { heading() }
+        )
         Spacer(Modifier.height(6.dp))
         Text("What should we work on today?", color = p.dim, fontSize = 16.sp, fontFamily = BodyFamily)
         Spacer(Modifier.height(22.dp))
@@ -504,14 +517,34 @@ fun HistoryDrawer(
                                     .background(p.accent)
                             )
                             if (sel) Spacer(Modifier.width(8.dp))
-                            Text(
-                                c.title, color = if (sel) p.text else p.dim, fontSize = 13.5.sp,
-                                fontFamily = BodyFamily,
-                                maxLines = 1, modifier = Modifier.weight(1f)
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        c.title, color = if (sel) p.text else p.dim, fontSize = 13.5.sp,
+                                        fontFamily = BodyFamily, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
+                                        maxLines = 1, modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        timeAgo(c.updated),
+                                        color = p.faint, fontSize = 11.sp, fontFamily = BodyFamily
+                                    )
+                                }
+                                val snippet = remember(c) {
+                                    c.messages.lastOrNull { it.role == "user" || it.role == "assistant" }
+                                        ?.content?.replace("\\s+".toRegex(), " ")?.trim()?.take(60).orEmpty()
+                                }
+                                if (snippet.isNotEmpty()) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        snippet, color = p.faint, fontSize = 12.sp,
+                                        fontFamily = BodyFamily, maxLines = 1
+                                    )
+                                }
+                            }
                             Box {
-                                IconButton(onClick = { menu = true }, modifier = Modifier.size(30.dp)) {
-                                    Icon(Icons.Filled.MoreVert, "Chat options", tint = p.faint, modifier = Modifier.size(16.dp))
+                                IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Filled.MoreVert, "Chat options for ${c.title}", tint = p.faint, modifier = Modifier.size(17.dp))
                                 }
                                 androidx.compose.material3.DropdownMenu(
                                     expanded = menu,
@@ -804,7 +837,10 @@ fun SettingsScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, "Back", tint = p.text)
             }
-            Text("Settings", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, fontFamily = DisplayFamily)
+            Text(
+                "Settings", color = p.text, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+                fontFamily = DisplayFamily, modifier = Modifier.semantics { heading() }
+            )
             Spacer(Modifier.weight(1f))
             Button(
                 onClick = { onSave(k, m, s, d) },
@@ -886,7 +922,7 @@ fun SettingsScreen(
             }
             item {
                 SettingSection("ABOUT", p) {
-                    SettingHint("Atria for Android · v1.0.0 · api.atria-asi.ai", p)
+                    SettingHint("Atria for Android · v1.1.0 · api.atria-asi.ai", p)
                 }
             }
         }

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -219,8 +220,12 @@ fun AtriaHome(vm: ChatViewModel) {
                     }
                 ) { pad ->
                     val listState = rememberLazyListState()
-                    LaunchedEffect(messages.size, generating, messages.lastOrNull()?.content?.length) {
-                        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+                    // Production behavior: follow the tail only while the user is
+                    // already reading it — never yank them away from history.
+                    LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
+                        if (messages.isEmpty()) return@LaunchedEffect
+                        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                        if (lastVisible >= messages.size - 2) listState.animateScrollToItem(messages.size - 1)
                     }
                     val showJump by remember {
                         derivedStateOf {
@@ -228,7 +233,12 @@ fun AtriaHome(vm: ChatViewModel) {
                             messages.isNotEmpty() && last < messages.size - 1
                         }
                     }
-                    Box(modifier = Modifier.fillMaxSize().background(p.bg).padding(pad)) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(p.bg).padding(pad),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        // Readability cap on wide screens (tablet / landscape)
+                        Column(modifier = Modifier.fillMaxHeight().widthIn(max = ThreadMaxWidth).fillMaxWidth()) {
                         if (messages.isEmpty()) {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -260,6 +270,7 @@ fun AtriaHome(vm: ChatViewModel) {
                                                 onCopy = {
                                                     clipboard.setText(AnnotatedString(m.content))
                                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    vm.toast("Copied to clipboard")
                                                 },
                                                 onEditSave = { vm.saveEdit(idx, it) }
                                             )
@@ -272,6 +283,7 @@ fun AtriaHome(vm: ChatViewModel) {
                                                 onCopy = {
                                                     clipboard.setText(AnnotatedString(m.content))
                                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    vm.toast("Copied to clipboard")
                                                 },
                                                 onRegen = { vm.regenerate(idx) },
                                                 onRetry = vm::retry,
@@ -282,6 +294,7 @@ fun AtriaHome(vm: ChatViewModel) {
                                     }
                                 }
                             }
+                        }
                         }
                         // Scroll-to-latest FAB, ChatGPT-style placement
                         AnimatedVisibility(
@@ -377,10 +390,13 @@ private fun ComposerBar(
         }
     }
 
+    Box(
+        modifier = Modifier.fillMaxWidth().background(p.bg),
+        contentAlignment = Alignment.Center
+    ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(p.bg)
+            .widthIn(max = ThreadMaxWidth).fillMaxWidth()
             .navigationBarsPadding()
             .imePadding()
             .padding(start = 14.dp, end = 14.dp, bottom = 10.dp, top = 4.dp)
@@ -484,5 +500,6 @@ private fun ComposerBar(
             color = p.faint, fontSize = 11.5.sp, fontFamily = BodyFamily,
             modifier = Modifier.padding(start = 10.dp)
         )
+    }
     }
 }
