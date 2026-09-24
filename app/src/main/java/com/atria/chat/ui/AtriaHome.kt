@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -33,18 +34,28 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,9 +69,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,28 +84,38 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AtriaHome(vm: ChatViewModel) {
-    val settings by vm.settings.collectAsState()
-    val convos by vm.convos.collectAsState()
-    val activeId by vm.activeId.collectAsState()
-    val query by vm.search.collectAsState()
-    val generating by vm.generating.collectAsState()
-    val showSettings by vm.showSettings.collectAsState()
-    val confirmClear by vm.confirmClear.collectAsState()
-    val renameId by vm.renameId.collectAsState()
-    val confirmDeleteId by vm.confirmDeleteId.collectAsState()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val convos by vm.convos.collectAsStateWithLifecycle()
+    val ready by vm.ready.collectAsStateWithLifecycle()
+    val streamingConvoId by vm.streamingConvoId.collectAsStateWithLifecycle()
+    val activeId by vm.activeId.collectAsStateWithLifecycle()
+    val query by vm.search.collectAsStateWithLifecycle()
+    val generating by vm.generating.collectAsStateWithLifecycle()
+    val showSettings by vm.showSettings.collectAsStateWithLifecycle()
+    val confirmClear by vm.confirmClear.collectAsStateWithLifecycle()
+    val renameId by vm.renameId.collectAsStateWithLifecycle()
+    val confirmDeleteId by vm.confirmDeleteId.collectAsStateWithLifecycle()
 
     val p = atriaPalette(settings.darkTheme)
     val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -102,7 +124,11 @@ fun AtriaHome(vm: ChatViewModel) {
     val clipboard = LocalClipboardManager.current
     val haptics = LocalHapticFeedback.current
     val ctx = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val compactTopBar = configuration.screenWidthDp < 380
+    val compactHeight = configuration.screenHeightDp < 500
     var showModel by remember { mutableStateOf(false) }
+    var showTopMenu by remember { mutableStateOf(false) }
 
     val convo = remember(convos, activeId) { convos.firstOrNull { it.id == activeId } }
     val messages = convo?.messages.orEmpty()
@@ -121,8 +147,24 @@ fun AtriaHome(vm: ChatViewModel) {
     }
 
     AtriaTheme(darkTheme = settings.darkTheme) {
-        // Full-screen settings replaces the old dialog
-        if (showSettings) {
+        if (!ready) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(p.bg),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AtriaMark(p, markSize = 52)
+                    Spacer(Modifier.height(18.dp))
+                    CircularProgressIndicator(
+                        color = p.accent,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Loading your conversations…", color = p.dim, fontSize = 13.sp, fontFamily = BodyFamily)
+                }
+            }
+        } else if (showSettings) {
             Box(modifier = Modifier.fillMaxSize().background(p.bg)) {
                 SettingsScreen(
                     apiKey = settings.apiKey, model = settings.model, system = settings.system,
@@ -135,7 +177,13 @@ fun AtriaHome(vm: ChatViewModel) {
             ModalNavigationDrawer(
                 drawerState = drawer,
                 drawerContent = {
-                    Box(modifier = Modifier.width(300.dp).fillMaxSize().background(p.surface1)) {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(max = 360.dp)
+                            .fillMaxWidth()
+                            .fillMaxHeight()
+                            .background(p.surface1)
+                    ) {
                         HistoryDrawer(
                             convos = convos,
                             activeId = activeId,
@@ -148,9 +196,15 @@ fun AtriaHome(vm: ChatViewModel) {
                             onRename = vm::askRename,
                             onDelete = vm::askDelete,
                             onShare = vm::shareConvo,
-                            onSettings = vm::openSettings,
+                            onSettings = {
+                                scope.launch {
+                                    drawer.close()
+                                    vm.openSettings()
+                                }
+                            },
                             onToggleTheme = vm::toggleTheme,
-                            dark = settings.darkTheme
+                            dark = settings.darkTheme,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -169,69 +223,142 @@ fun AtriaHome(vm: ChatViewModel) {
                                 Text(
                                     convo?.title ?: "Atria Chat",
                                     color = p.text, fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold,
-                                    fontFamily = DisplayFamily, maxLines = 1
+                                    fontFamily = DisplayFamily, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             },
                             actions = {
-                                // Model pill now opens the ChatGPT-style model picker
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(99.dp))
-                                        .background(p.surface2)
-                                        .border(1.dp, p.border, RoundedCornerShape(99.dp))
-                                        .clickable { showModel = true }
-                                        .padding(horizontal = 11.dp, vertical = 6.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .clip(RoundedCornerShape(99.dp))
-                                                .background(p.accent)
+                                if (compactTopBar) {
+                                    IconButton(onClick = { showModel = true }) {
+                                        Icon(
+                                            Icons.Filled.AutoAwesome,
+                                            "Choose model: ${settings.model}",
+                                            tint = p.dim,
+                                            modifier = Modifier.size(20.dp)
                                         )
-                                        Spacer(Modifier.width(7.dp))
-                                        Text(settings.model, color = p.dim, fontSize = 11.5.sp, fontFamily = BodyFamily, maxLines = 1)
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .heightIn(min = 48.dp)
+                                            .clip(RoundedCornerShape(99.dp))
+                                            .background(p.surface2)
+                                            .border(1.dp, p.border, RoundedCornerShape(99.dp))
+                                            .clickable(role = Role.Button) { showModel = true }
+                                            .padding(horizontal = 11.dp, vertical = 7.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .clip(RoundedCornerShape(99.dp))
+                                                    .background(p.accent)
+                                            )
+                                            Spacer(Modifier.width(7.dp))
+                                            Text(
+                                                settings.model, color = p.dim, fontSize = 11.5.sp,
+                                                fontFamily = BodyFamily, maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.widthIn(max = 96.dp)
+                                            )
+                                        }
                                     }
                                 }
-                                IconButton(onClick = vm::exportCurrent) {
-                                    Icon(Icons.Filled.Download, "Export", tint = p.dim, modifier = Modifier.size(19.dp))
-                                }
-                                IconButton(onClick = vm::clearCurrent) {
-                                    Icon(Icons.Filled.Delete, "Clear", tint = p.dim, modifier = Modifier.size(19.dp))
+                                Box {
+                                    IconButton(onClick = { showTopMenu = true }) {
+                                        Icon(Icons.Filled.MoreVert, "More options", tint = p.dim)
+                                    }
+                                    DropdownMenu(
+                                        expanded = showTopMenu,
+                                        onDismissRequest = { showTopMenu = false },
+                                        modifier = Modifier.background(p.surface2)
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("New chat", color = p.text) },
+                                            leadingIcon = { Icon(Icons.Filled.Add, null, tint = p.dim) },
+                                            onClick = { showTopMenu = false; vm.newChat() }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Choose model", color = p.text) },
+                                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, null, tint = p.dim) },
+                                            onClick = { showTopMenu = false; showModel = true }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Export as Markdown", color = p.text) },
+                                            leadingIcon = { Icon(Icons.Filled.Share, null, tint = p.dim) },
+                                            enabled = messages.isNotEmpty(),
+                                            onClick = { showTopMenu = false; vm.exportCurrent() }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Clear chat", color = p.danger) },
+                                            leadingIcon = { Icon(Icons.Filled.Delete, null, tint = p.danger) },
+                                            enabled = messages.isNotEmpty(),
+                                            onClick = { showTopMenu = false; vm.clearCurrent() }
+                                        )
+                                    }
                                 }
                             },
                             colors = TopAppBarDefaults.topAppBarColors(containerColor = p.bg)
                         )
                     },
                     bottomBar = {
-                        ComposerBar(
-                            p = p,
-                            generating = generating,
-                            onSend = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                vm.send(it)
-                            },
-                            onStop = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                vm.stop()
-                            },
-                            onCommand = vm::execCommand,
-                            onToast = vm::toast
-                        )
+                        key(activeId) {
+                            ComposerBar(
+                                p = p,
+                                generating = generating,
+                                compactHeight = compactHeight,
+                                draftFlow = vm.composerDraft,
+                                onTextChange = vm::setComposerDraft,
+                                canSend = settings.apiKey.isNotBlank(),
+                                onSend = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    vm.send(it)
+                                },
+                                onStop = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    vm.stop()
+                                },
+                                onCommand = vm::execCommand,
+                                onToast = vm::toast
+                            )
+                        }
                     }
                 ) { pad ->
                     val listState = rememberLazyListState()
-                    // Production behavior: follow the tail only while the user is
-                    // already reading it — never yank them away from history.
-                    LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
-                        if (messages.isEmpty()) return@LaunchedEffect
-                        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                        if (lastVisible >= messages.size - 2) listState.animateScrollToItem(messages.size - 1)
+                    var previousCount by remember(convo?.id) { mutableIntStateOf(messages.size) }
+                    val tailThresholdPx = with(LocalDensity.current) { 80.dp.roundToPx() }
+
+                    // Open each conversation at its true bottom. While a response grows,
+                    // follow only when the reader was already geometrically near the tail.
+                    LaunchedEffect(convo?.id) {
+                        previousCount = 0
+                        if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex, Int.MAX_VALUE)
                     }
-                    val showJump by remember {
+                    LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
+                        if (messages.isEmpty()) {
+                            previousCount = 0
+                            return@LaunchedEffect
+                        }
+                        val info = listState.layoutInfo
+                        val lastVisible = info.visibleItemsInfo.lastOrNull()
+                        val atTail = lastVisible != null && lastVisible.index == messages.lastIndex &&
+                            (!listState.canScrollForward ||
+                                lastVisible.offset + lastVisible.size >= info.viewportEndOffset - tailThresholdPx)
+                        val grewNearTail = messages.size > previousCount &&
+                            (previousCount <= 2 || atTail || (lastVisible?.index ?: -1) >= previousCount - 2)
+                        if (grewNearTail || atTail) {
+                            listState.scrollToItem(messages.lastIndex, Int.MAX_VALUE)
+                        }
+                        previousCount = messages.size
+                    }
+                    val showJump by remember(convo?.id, messages.size, tailThresholdPx) {
                         derivedStateOf {
-                            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                            messages.isNotEmpty() && last < messages.size - 1
+                            if (messages.isEmpty()) return@derivedStateOf false
+                            val info = listState.layoutInfo
+                            val lastVisible = info.visibleItemsInfo.lastOrNull()
+                            lastVisible == null || lastVisible.index != messages.lastIndex ||
+                                (listState.canScrollForward &&
+                                    lastVisible.offset + lastVisible.size < info.viewportEndOffset - tailThresholdPx)
                         }
                     }
                     Box(
@@ -262,7 +389,7 @@ fun AtriaHome(vm: ChatViewModel) {
                             ) {
                                 itemsIndexed(
                                     messages,
-                                    key = { k, m -> "$k-${m.role}-${m.content.hashCode()}-${m.error}" }
+                                    key = { _, message -> message.id }
                                 ) { idx, m ->
                                     Box {
                                         if (m.role == "user") {
@@ -277,9 +404,10 @@ fun AtriaHome(vm: ChatViewModel) {
                                             )
                                         } else {
                                             val isLast = idx == messages.size - 1
-                                            val streaming = generating && isLast
+                                            val streaming = generating && isLast && streamingConvoId == convo?.id
                                             AiMessage(
-                                                msg = m, isLast = isLast, generating = generating,
+                                                msg = m, isLast = isLast,
+                                                generating = generating && streamingConvoId == convo?.id,
                                                 streaming = streaming, p = p,
                                                 onCopy = {
                                                     clipboard.setText(AnnotatedString(m.content))
@@ -305,12 +433,12 @@ fun AtriaHome(vm: ChatViewModel) {
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
                         ) {
                             IconButton(
-                                onClick = { scope.launch { listState.animateScrollToItem(messages.size - 1) } },
+                                onClick = { scope.launch { listState.animateScrollToItem(messages.lastIndex, Int.MAX_VALUE) } },
                                 modifier = Modifier
                                     .shadow(8.dp, CircleShape)
                                     .background(p.surface2, CircleShape)
                                     .border(1.dp, p.border, CircleShape)
-                                    .size(38.dp)
+                                    .size(48.dp)
                             ) {
                                 Icon(Icons.Filled.ArrowDownward, "Scroll to latest", tint = p.dim, modifier = Modifier.size(18.dp))
                             }
@@ -351,20 +479,39 @@ fun AtriaHome(vm: ChatViewModel) {
 private fun ComposerBar(
     p: AtriaPalette,
     generating: Boolean,
+    compactHeight: Boolean,
+    draftFlow: kotlinx.coroutines.flow.StateFlow<String>,
+    onTextChange: (String) -> Unit,
+    canSend: Boolean,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
     onCommand: (String) -> Unit,
     onToast: (String) -> Unit
 ) {
-    var text by remember { mutableStateOf("") }
+    val text by draftFlow.collectAsStateWithLifecycle()
     var palSel by remember { mutableStateOf(0) }
     val showPalette = text.startsWith("/") && !generating
+    val paletteMaxHeight = if (compactHeight) 96.dp else 248.dp
     val matches = remember(text) {
         if (!showPalette) emptyList()
         else {
             val q = text.drop(1).split(Regex("\\s")).first().lowercase()
-            COMMANDS.filter { it.cmd.drop(1).startsWith(q) }
+            COMMANDS.filter { it.cmd.drop(1).startsWith(q) }.take(5)
         }
+    }
+
+    fun submit() {
+        if (generating) return
+        val value = text.trim()
+        if (value.isEmpty()) return
+        if (showPalette && matches.isNotEmpty()) {
+            onCommand(matches[palSel % matches.size].cmd)
+            onTextChange("")
+        } else {
+            onSend(value)
+            if (canSend) onTextChange("")
+        }
+        palSel = 0
     }
 
     // System voice input — no permission needed (delegates to recognizer UI)
@@ -375,7 +522,7 @@ private fun ComposerBar(
             val heard = result.data
                 ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                 ?.firstOrNull()?.trim()
-            if (!heard.isNullOrEmpty()) text = (text.trim() + " " + heard).trim()
+            if (!heard.isNullOrEmpty()) onTextChange((text.trim() + " " + heard).trim())
         }
     }
     fun startVoice() {
@@ -406,6 +553,8 @@ private fun ComposerBar(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = paletteMaxHeight)
+                    .verticalScroll(rememberScrollState())
                     .clip(RoundedCornerShape(16.dp))
                     .background(p.surface1)
                     .border(1.dp, p.borderStrong, RoundedCornerShape(16.dp))
@@ -417,7 +566,8 @@ private fun ComposerBar(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (k == (palSel % matches.size)) p.surface2 else p.surface1)
-                            .clickable { onCommand(c.cmd); text = ""; palSel = 0 }
+                            .clickable { onCommand(c.cmd); onTextChange(""); palSel = 0 }
+                            .heightIn(min = 48.dp)
                             .padding(horizontal = 10.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -430,7 +580,11 @@ private fun ComposerBar(
                             Text(c.cmd, color = p.accentStrong, fontFamily = MonoFamily, fontSize = 12.sp)
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text(c.desc, color = p.dim, fontSize = 13.sp, fontFamily = BodyFamily)
+                        Text(
+                            c.desc, color = p.dim, fontSize = 13.sp, fontFamily = BodyFamily,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }
@@ -449,18 +603,23 @@ private fun ComposerBar(
         ) {
             BasicTextField(
                 value = text,
-                onValueChange = { text = it; palSel = 0 },
-                modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+                onValueChange = { onTextChange(it); palSel = 0 },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 textStyle = TextStyle(color = p.text, fontSize = 15.5.sp, lineHeight = 22.sp, fontFamily = BodyFamily),
                 cursorBrush = SolidColor(p.accent),
-                maxLines = 6,
+                maxLines = if (compactHeight) 3 else 6,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Send
+                ),
+                keyboardActions = KeyboardActions(onSend = { submit() }),
                 decorationBox = { inner ->
                     if (text.isEmpty()) Text("Message Atria…", color = p.faint, fontSize = 15.5.sp, fontFamily = BodyFamily)
                     inner()
                 }
             )
             if (!generating) {
-                IconButton(onClick = ::startVoice, modifier = Modifier.size(40.dp)) {
+                IconButton(onClick = ::startVoice, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Filled.Mic, "Voice input", tint = p.faint, modifier = Modifier.size(19.dp))
                 }
             }
@@ -468,39 +627,35 @@ private fun ComposerBar(
             val enabled = generating || text.isNotBlank()
             val bg = if (!enabled) p.surface3 else p.accent
             val fg = if (!enabled) p.faint else p.onAccent
-            Box(
+            IconButton(
+                enabled = enabled,
+                onClick = {
+                    if (generating) onStop() else submit()
+                },
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .background(bg)
-                    .then(if (enabled) Modifier.clickable {
-                        if (generating) onStop()
-                        else {
-                            val v = text.trim()
-                            if (v.isNotEmpty()) {
-                                if (showPalette && matches.isNotEmpty()) {
-                                    onCommand(matches[palSel % matches.size].cmd)
-                                } else onSend(v)
-                                text = ""
-                            }
-                        }
-                    } else Modifier)
-                    .border(if (generating) 1.dp else 0.dp, p.borderStrong, CircleShape),
-                contentAlignment = Alignment.Center
+                    .border(if (generating) 1.dp else 0.dp, p.borderStrong, CircleShape)
             ) {
                 Icon(
                     if (generating) Icons.Filled.Stop else Icons.Filled.ArrowUpward,
                     if (generating) "Stop" else "Send",
-                    tint = fg, modifier = Modifier.size(19.dp)
+                    tint = fg,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
-        Spacer(Modifier.height(7.dp))
-        Text(
-            "Atria can make mistakes — verify important information.",
-            color = p.faint, fontSize = 11.5.sp, fontFamily = BodyFamily,
-            modifier = Modifier.padding(start = 10.dp)
-        )
+        if (!compactHeight) {
+            Spacer(Modifier.height(7.dp))
+            Text(
+                "Atria can make mistakes — verify important information.",
+                color = p.faint, fontSize = 11.5.sp, fontFamily = BodyFamily,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
+            )
+        }
     }
     }
 }

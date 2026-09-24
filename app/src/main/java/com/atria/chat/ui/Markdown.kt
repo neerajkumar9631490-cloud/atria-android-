@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,6 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -113,22 +118,6 @@ private fun parseBlocks(src: String): List<Block> {
             out.add(Block.Table(header, rows))
             continue
         }
-        if (t.matches(Regex("^([-*•]\\s+).*"))) {
-            flush()
-            val items = mutableListOf<Item>()
-            while (i < lines.size) {
-                val lt = lines[i]
-                val ltt = lt.trim()
-                // task list?
-                val task = Regex("^[-*•]\\s+\\[([ xX])\\]\\s+(.*)").find(ltt)
-                if (task != null) break // handled by task branch below on next loop
-                if (!ltt.matches(Regex("^([-*•]\\s+).*"))) break
-                val depth = (lt.length - lt.trimStart().length) / 2
-                items.add(Item(depth.coerceIn(0, 4), ltt.drop(2).trim())); i++
-            }
-            if (items.isNotEmpty()) out.add(Block.Ul(items))
-            continue
-        }
         val taskM = Regex("^[-*•]\\s+\\[([ xX])\\]\\s+(.*)").find(t)
         if (taskM != null) {
             flush()
@@ -138,6 +127,19 @@ private fun parseBlocks(src: String): List<Block> {
                 items.add(TaskItem(m.groupValues[1].lowercase() == "x", m.groupValues[2].trim())); i++
             }
             out.add(Block.Task(items))
+            continue
+        }
+        if (t.matches(Regex("^([-*•]\\s+).*"))) {
+            flush()
+            val items = mutableListOf<Item>()
+            while (i < lines.size) {
+                val lt = lines[i]
+                val ltt = lt.trim()
+                if (!ltt.matches(Regex("^([-*•]\\s+).*"))) break
+                val depth = (lt.length - lt.trimStart().length) / 2
+                items.add(Item(depth.coerceIn(0, 4), ltt.drop(2).trim())); i++
+            }
+            if (items.isNotEmpty()) out.add(Block.Ul(items))
             continue
         }
         if (t.matches(Regex("^(\\d+[.)]\\s+).*"))) {
@@ -229,7 +231,8 @@ fun ProMarkdown(text: String, p: AtriaPalette) {
                             fontSize = size.sp,
                             fontFamily = DisplayFamily,
                             fontWeight = FontWeight.SemiBold,
-                            lineHeight = (size + 6).sp
+                            lineHeight = (size + 6).sp,
+                            modifier = Modifier.semantics { heading() }
                         )
                     }
                     is Block.Para -> {
@@ -245,12 +248,12 @@ fun ProMarkdown(text: String, p: AtriaPalette) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(0.dp))
+                                .height(IntrinsicSize.Min)
                         ) {
                             Box(
                                 modifier = Modifier
                                     .width(3.dp)
-                                    .height(44.dp)
+                                    .fillMaxHeight()
                                     .background(p.accent, RoundedCornerShape(2.dp))
                             )
                             Spacer(Modifier.width(12.dp))
@@ -326,7 +329,11 @@ fun ProMarkdown(text: String, p: AtriaPalette) {
                                         fontFamily = BodyFamily,
                                         lineHeight = 23.sp,
                                         style = if (item.done) androidx.compose.ui.text.TextStyle(textDecoration = TextDecoration.LineThrough) else androidx.compose.ui.text.TextStyle(),
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .semantics {
+                                                stateDescription = if (item.done) "Completed" else "Not completed"
+                                            }
                                     )
                                 }
                             }
@@ -350,6 +357,7 @@ fun ProMarkdown(text: String, p: AtriaPalette) {
 @Composable
 private fun ProTable(b: Block.Table, p: AtriaPalette) {
     val scroll = rememberScrollState()
+    val tableWidth = (b.header.size.coerceAtLeast(1) * 128).dp
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -359,8 +367,8 @@ private fun ProTable(b: Block.Table, p: AtriaPalette) {
     ) {
         Column(
             modifier = Modifier
+                .width(tableWidth)
                 .horizontalScroll(scroll)
-                .padding(0.dp)
         ) {
             Row(modifier = Modifier.background(p.surface2)) {
                 b.header.forEach { h ->
@@ -371,7 +379,7 @@ private fun ProTable(b: Block.Table, p: AtriaPalette) {
                         fontFamily = BodyFamily,
                         fontSize = 13.5.sp,
                         modifier = Modifier
-                            .width(150.dp)
+                            .width(128.dp)
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                     )
                 }
@@ -386,7 +394,7 @@ private fun ProTable(b: Block.Table, p: AtriaPalette) {
                             fontFamily = BodyFamily,
                             fontSize = 13.5.sp,
                             modifier = Modifier
-                                .width(150.dp)
+                                .width(128.dp)
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         )
                     }

@@ -1,5 +1,6 @@
 package com.atria.chat.ui
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
@@ -53,14 +54,19 @@ class ChatViewModel(
     val settings: StateFlow<SettingsData> = store.settings
     val convos: StateFlow<List<Conversation>> = store.convos
     val activeId: StateFlow<String?> = store.activeId
+    val ready: StateFlow<Boolean> = store.initialized
 
     private val _search = MutableStateFlow("")
     val search: StateFlow<String> = _search.asStateFlow()
+
+    private val _composerDraft = MutableStateFlow("")
+    val composerDraft: StateFlow<String> = _composerDraft.asStateFlow()
 
     private val _generating = MutableStateFlow(false)
     val generating: StateFlow<Boolean> = _generating.asStateFlow()
 
     private val _streamingId = MutableStateFlow<String?>(null)
+    val streamingConvoId: StateFlow<String?> = _streamingId.asStateFlow()
 
     private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
@@ -86,16 +92,23 @@ class ChatViewModel(
 
     // -- drawer / list -------------------------------------------------------
     fun setSearch(q: String) { _search.value = q }
+    fun setComposerDraft(value: String) { _composerDraft.value = value.take(20_000) }
 
     fun newChat() {
+        if (!store.initialized.value) return
         val cur = active()
         if (cur != null && cur.messages.isEmpty()) return
+        stop()
+        _composerDraft.value = ""
         val c = Conversation(id = store.newId(), title = "New chat")
         store.persistConvos(listOf(c) + convos.value, c.id)
     }
 
     fun select(id: String) {
-        if (activeId.value != id) store.persistConvos(convos.value, id)
+        if (!store.initialized.value || activeId.value == id) return
+        stop()
+        _composerDraft.value = ""
+        store.persistConvos(convos.value, id)
     }
 
     fun askDelete(id: String) { _confirmDeleteId.value = id }
@@ -104,6 +117,10 @@ class ChatViewModel(
     fun confirmDelete() {
         val id = _confirmDeleteId.value ?: return
         _confirmDeleteId.value = null
+        if (activeId.value == id) {
+            stop()
+            _composerDraft.value = ""
+        }
         val rest = convos.value.filterNot { it.id == id }
         val next = if (activeId.value == id) rest.maxByOrNull { it.updated }?.id else activeId.value
         store.persistConvos(rest, next)
@@ -125,10 +142,23 @@ class ChatViewModel(
     fun openSettings() { _showSettings.value = true }
     fun closeSettings() { _showSettings.value = false }
 
+    private suspend fun persistSettings(value: SettingsData, successMessage: String? = null): Boolean {
+        return try {
+            store.saveSettings(value)
+            successMessage?.let { emit(UiEvent.Toast(it)) }
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emit(UiEvent.Toast("Could not save settings. Please try again."))
+            false
+        }
+    }
+
     fun saveSettings(apiKey: String, model: String, system: String, darkTheme: Boolean? = null) {
         viewModelScope.launch {
             val cur = settings.value
-            store.saveSettings(
+            val saved = persistSettings(
                 cur.copy(
                     apiKey = apiKey.trim(),
                     model = model.trim().ifEmpty { DEFAULT_MODEL },
@@ -136,15 +166,17 @@ class ChatViewModel(
                     darkTheme = darkTheme ?: cur.darkTheme
                 )
             )
-            _showSettings.value = false
-            emit(UiEvent.Toast("Settings saved"))
+            if (saved) {
+                _showSettings.value = false
+                emit(UiEvent.Toast("Settings saved"))
+            }
         }
     }
 
     fun toggleTheme() {
         viewModelScope.launch {
             val cur = settings.value
-            store.saveSettings(cur.copy(darkTheme = !cur.darkTheme))
+            persistSettings(cur.copy(darkTheme = !cur.darkTheme))
         }
     }
 
@@ -152,12 +184,19 @@ class ChatViewModel(
         val v = id.trim()
         if (v.isEmpty()) return
         viewModelScope.launch {
-            store.saveSettings(settings.value.copy(model = v))
-            emit(UiEvent.Toast("Model set to $v"))
+            if (persistSettings(settings.value.copy(model = v))) {
+                emit(UiEvent.Toast("Model set to $v"))
+            }
         }
     }
 
     fun toast(msg: String) = emit(UiEvent.Toast(msg))
+
+    override fun onCleared() {
+        api.cancel()
+        job?.cancel()
+        super.onCleared()
+    }
 
     fun shareMessage(content: String) {
         if (content.isBlank()) {
@@ -185,6 +224,11 @@ class ChatViewModel(
             execCommand(text)
             return
         }
+        if (!store.initialized.value) {
+            emit(UiEvent.Toast("Your conversations are still loading"))
+            return
+        }
+        if (!hasApiKey()) return
         if (_generating.value) {
             emit(UiEvent.Toast("Still generating — stop the current reply first"))
             return
@@ -200,6 +244,7 @@ class ChatViewModel(
         val target = c ?: return
         val withUser = target.messages + ChatMessage(role = "user", content = text)
         updateConvo(target.id) { it.copy(messages = withUser, updated = System.currentTimeMillis()) }
+        _composerDraft.value = ""
         runCompletion(target.id)
     }
 
@@ -208,7 +253,15 @@ class ChatViewModel(
         job?.cancel()
     }
 
+    private fun hasApiKey(): Boolean {
+        if (settings.value.apiKey.isNotBlank()) return true
+        _showSettings.value = true
+        emit(UiEvent.Toast("Add your Atria API key to start chatting"))
+        return false
+    }
+
     fun retry() {
+        if (!hasApiKey()) return
         val c = active() ?: return
         if (_generating.value) return
         // drop trailing failed assistant message, keep user messages
@@ -219,6 +272,7 @@ class ChatViewModel(
     }
 
     fun regenerate(index: Int) {
+        if (!hasApiKey()) return
         val c = active() ?: return
         if (_generating.value) {
             emit(UiEvent.Toast("Still generating — stop the current reply first"))
@@ -230,6 +284,7 @@ class ChatViewModel(
     }
 
     fun saveEdit(index: Int, newText: String) {
+        if (!hasApiKey()) return
         val c = active() ?: return
         if (_generating.value) {
             emit(UiEvent.Toast("Stop the current reply before editing"))
@@ -259,6 +314,7 @@ class ChatViewModel(
     fun confirmClearYes() {
         _confirmClear.value = false
         val c = active() ?: return
+        stop()
         updateConvo(c.id) { it.copy(messages = emptyList(), updated = System.currentTimeMillis()) }
         emit(UiEvent.Toast("Chat cleared"))
     }
@@ -306,8 +362,9 @@ class ChatViewModel(
                 } else {
                     val cur = settings.value
                     viewModelScope.launch {
-                        store.saveSettings(cur.copy(model = arg.trim()))
-                        emit(UiEvent.Toast("Model set to ${arg.trim()}"))
+                        if (persistSettings(cur.copy(model = arg.trim()))) {
+                            emit(UiEvent.Toast("Model set to ${arg.trim()}"))
+                        }
                     }
                 }
             }
@@ -322,6 +379,8 @@ class ChatViewModel(
     private fun runCompletion(convoId: String) {
         if (_generating.value) return
         _generating.value = true
+        pending = StringBuilder()
+        lastPaint = 0L
         val t0 = System.currentTimeMillis()
         val aiMsg = ChatMessage(role = "assistant", content = "")
         val base = (convos.value.firstOrNull { it.id == convoId }?.messages.orEmpty()) + aiMsg
@@ -420,7 +479,12 @@ class ChatViewModel(
             putExtra(Intent.EXTRA_SUBJECT, fileName)
             putExtra(Intent.EXTRA_TEXT, markdown)
         }
-        ctx.startActivity(Intent.createChooser(send, "Share chat"))
+        if (ctx !is Activity) send.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            ctx.startActivity(Intent.createChooser(send, "Share chat"))
+        } catch (_: Exception) {
+            emit(UiEvent.Toast("No sharing app is available on this device"))
+        }
     }
 
     @Suppress("UNCHECKED_CAST")

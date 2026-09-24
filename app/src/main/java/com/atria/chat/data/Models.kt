@@ -1,6 +1,7 @@
 package com.atria.chat.data
 
 import kotlinx.serialization.Serializable
+import java.util.UUID
 
 const val DEFAULT_MODEL = "Atria-Dawn-Preview"
 const val API_URL = "https://api.atria-asi.ai/v1/chat/completions"
@@ -8,6 +9,7 @@ const val API_URL = "https://api.atria-asi.ai/v1/chat/completions"
 @Serializable
 data class ChatMessage(
     val role: String, // "user" | "assistant" | "system"(transient only)
+    val id: String = UUID.randomUUID().toString(),
     val content: String = "",
     val local: Boolean = false,
     val error: String? = null,
@@ -87,7 +89,7 @@ fun buildHelpMarkdown(currentModel: String): String = listOf(
     "| `/help` | Show this guide |",
     "",
     "#### Keyboard & gestures",
-    "- **Enter** — send · long-press a message to copy",
+    "- Tap **Send** to send · use the action buttons beneath a message to copy or edit it",
     "- Type **/** at the start of a message to open the command menu",
     "",
     "#### Professional features",

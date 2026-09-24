@@ -1,5 +1,8 @@
 package com.atria.chat.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -8,7 +11,9 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -16,6 +21,7 @@ import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import com.atria.chat.R
 
 // ---------------------------------------------------------------------------
@@ -29,8 +35,8 @@ val AtriaSurface3Dark = Color(0xFF1D242F)
 val AtriaBorderDark = Color(0xFF232B36)
 val AtriaBorderStrongDark = Color(0xFF2F3947)
 val AtriaTextDark = Color(0xFFE9EDF3)
-val AtriaDimDark = Color(0xFF9AA5B4)
-val AtriaFaintDark = Color(0xFF5F6B7A)
+val AtriaDimDark = Color(0xFFABB5C2)
+val AtriaFaintDark = Color(0xFF818D9C)
 val AtriaAccentDark = Color(0xFFE2A45C)
 val AtriaAccentStrongDark = Color(0xFFEFBD7F)
 val AtriaOnAccentDark = Color(0xFF1A1106)
@@ -42,16 +48,18 @@ val AtriaSurface3Light = Color(0xFFE2E8F0)
 val AtriaBorderLight = Color(0xFFE2E8F0)
 val AtriaBorderStrongLight = Color(0xFFCBD5E1)
 val AtriaTextLight = Color(0xFF1E293B)
-val AtriaDimLight = Color(0xFF475569)
-val AtriaFaintLight = Color(0xFF94A3B8)
-val AtriaAccentLight = Color(0xFF8B5CF6)
-val AtriaAccentStrongLight = Color(0xFF7C3AED)
+val AtriaDimLight = Color(0xFF334155)
+val AtriaFaintLight = Color(0xFF64748B)
+val AtriaAccentLight = Color(0xFFB45309)
+val AtriaAccentStrongLight = Color(0xFF92400E)
 val AtriaOnAccentLight = Color(0xFFFFFFFF)
 
 val AtriaSuccess = Color(0xFF10B981)
 val AtriaWarning = Color(0xFFF59E0B)
 val AtriaDanger = Color(0xFFEF4444)
 val AtriaInfo = Color(0xFF3B82F6)
+val AtriaDangerDark = Color(0xFFF87171)
+val AtriaDangerLight = Color(0xFFC2413B)
 
 @Immutable
 data class AtriaPalette(
@@ -68,7 +76,8 @@ data class AtriaPalette(
     val accentStrong: Color,
     val onAccent: Color,
     val accentSoft: Color,
-    val codeBg: Color
+    val codeBg: Color,
+    val danger: Color
 )
 
 val DarkPalette = AtriaPalette(
@@ -85,7 +94,8 @@ val DarkPalette = AtriaPalette(
     accentStrong = AtriaAccentStrongDark,
     onAccent = AtriaOnAccentDark,
     accentSoft = Color(0x21E2A45C),
-    codeBg = Color(0xFF0D1117)
+    codeBg = Color(0xFF0D1117),
+    danger = AtriaDangerDark
 )
 
 val LightPalette = AtriaPalette(
@@ -101,8 +111,9 @@ val LightPalette = AtriaPalette(
     accent = AtriaAccentLight,
     accentStrong = AtriaAccentStrongLight,
     onAccent = AtriaOnAccentLight,
-    accentSoft = Color(0x148B5CF6),
-    codeBg = Color(0xFF0D1117) // code blocks stay dark in both themes (like GitHub)
+    accentSoft = Color(0x14B45309),
+    codeBg = Color(0xFF0D1117), // code blocks stay dark in both themes (like GitHub)
+    danger = AtriaDangerLight
 )
 
 private fun AtriaPalette.toColorScheme(dark: Boolean): ColorScheme {
@@ -124,7 +135,7 @@ private fun AtriaPalette.toColorScheme(dark: Boolean): ColorScheme {
         surfaceContainerHigh = surface3,
         outline = border,
         outlineVariant = borderStrong,
-        error = AtriaDanger,
+        error = danger,
         secondary = dim,
         tertiary = accentStrong
     )
@@ -175,11 +186,28 @@ fun AtriaTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = view.context.findActivity()?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view)?.apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
+
     MaterialTheme(
         colorScheme = (if (darkTheme) DarkPalette else LightPalette).toColorScheme(darkTheme),
         typography = AtriaTypography,
         content = content
     )
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @Composable

@@ -49,7 +49,7 @@ class AtriaApi {
         onDelta: (String) -> Unit
     ): String = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) throw AtriaException(
-            "No API key configured. Open Settings (bottom-left gear) and paste your Atria API key."
+            "No API key configured. Open Settings from the menu or drawer and paste your Atria API key."
         )
         val clean = history
             .filter { !it.local && (it.role == "user" || it.role == "assistant" || it.role == "system") && it.content.isNotBlank() }
@@ -63,12 +63,16 @@ class AtriaApi {
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .addHeader("Accept", "text/event-stream")
-            .addHeader("User-Agent", "Atria-Android/1.0")
+            .addHeader("User-Agent", "Atria-Android/1.2.0")
             .post(bodyJson.toRequestBody("application/json".toMediaType()))
             .build()
 
         val call = client.newCall(req)
         currentCall = call
+        // Coroutine cancellation must also interrupt a blocking SSE read.
+        kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.invokeOnCompletion { cause ->
+            if (cause is kotlinx.coroutines.CancellationException) call.cancel()
+        }
         try {
             call.execute().use { resp ->
                 if (!resp.isSuccessful) {
@@ -77,7 +81,6 @@ class AtriaApi {
                 }
                 val source = resp.body?.source() ?: throw AtriaException("Empty response from the model.")
                 val out = StringBuilder()
-                var buf = ""
                 while (true) {
                     // Cooperative cancellation
                     if (!kotlin.coroutines.coroutineContext.isActive) {

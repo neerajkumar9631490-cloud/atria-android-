@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.atria.chat.data.AtriaApi
 import com.atria.chat.data.AtriaStore
@@ -22,10 +21,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         store = AtriaStore(applicationContext)
         enableEdgeToEdge()
-        WindowCompat.getInsetsController(window, window.decorView)?.apply {
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
         setContent {
             val vm: ChatViewModel = viewModel(factory = ChatViewModel.Factory(store, api))
             AtriaHome(vm)

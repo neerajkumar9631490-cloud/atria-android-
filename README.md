@@ -8,9 +8,10 @@ model `Atria-Dawn-Preview`), ported from `server.py`.
 - **Conversations** — new / rename / delete, search, grouped by Today · Yesterday · 7 days · 30 days · Older, persisted on-device
 - **Streaming chat** — live SSE token rendering, Stop button, timing + model metadata
 - **Professional markdown** — headers, lists, tables, quotes, inline code, dark code blocks with language label + copy button, selectable text
-- **Welcome screen** — time-aware greeting + 4 suggestion cards
-- **Composer** — rounded pro input, `/` command palette (`/new /clear /model /export /theme /stop /help`), send/stop FAB
-- **Settings** — API key (device-only), model, system prompt, dark/light theme (Atria tokens: `#0B0E13` + `#E2A45C`)
+- **Welcome screen** — time-aware greeting + responsive suggestion cards (one column on phones, two on wide screens)
+- **Composer** — mobile-safe rounded input, IME send action, voice input, compact landscape mode, `/` command palette (`/new /clear /model /export /theme /stop /help`)
+- **Settings** — edge-to-edge safe API key (device-only, Android backup disabled), model, system prompt, dark/light theme
+- **Adaptive layout** — small-phone, landscape, tablet width caps, correct status/navigation/IME insets, accessible touch targets
 - **Export** — share any chat as Markdown via Android Sharesheet
 - **Error cards** — Retry + Open settings, same copy as the web UI
 
@@ -28,7 +29,8 @@ Every push to `main` (or **Actions → Build APK → Run workflow**) builds a fr
 
 ## Project notes
 
-- Package: `com.atria.chat` · minSdk 26 · target/compile 34 · AGP 8.5.2 · Kotlin 2.0.21 · Compose BOM 2024.10.00 · Gradle 8.7 · JDK 17
+- Package: `com.atria.chat` · version `1.2.0` · minSdk 26 · target/compile 34 · AGP 8.5.2 · Kotlin 2.0.21 · Compose BOM 2024.10.00 · Gradle 8.7 · JDK 17
 - Network: `OkHttp` SSE client (`AtriaApi.kt`) — same contract as `server.py::_upstream_events`
 - Storage: `DataStore` (settings) + JSON file (conversations) — no server needed
 - No API key is committed. Never commit one.
+- UI changes use the existing Compose dependencies only; no new packages are required.
